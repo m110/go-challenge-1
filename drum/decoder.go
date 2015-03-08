@@ -9,9 +9,7 @@ import (
 	"strings"
 )
 
-const (
-	STEPS = 16
-)
+const trackSteps = 16
 
 // Pattern is the high level representation of the
 // drum pattern contained in a .splice file.
@@ -22,8 +20,9 @@ type Pattern struct {
 	Tracks  []*Track
 }
 
+// Track is the representation of single track in a pattern
 type Track struct {
-	Id    byte
+	ID    byte
 	Name  string
 	Steps []byte
 }
@@ -35,7 +34,7 @@ func (p *Pattern) String() string {
 	result = append(result, fmt.Sprintf("Tempo: %v", p.Tempo))
 
 	for _, track := range p.Tracks {
-		line := fmt.Sprintf("(%d) %s\t", track.Id, track.Name)
+		line := fmt.Sprintf("(%d) %s\t", track.ID, track.Name)
 
 		for i, step := range track.Steps {
 			if i%4 == 0 {
@@ -69,7 +68,7 @@ func DecodeFile(path string) (*Pattern, error) {
 
 	defer file.Close()
 
-	return Decode(file)
+	return decode(file)
 }
 
 type decoder struct {
@@ -78,9 +77,9 @@ type decoder struct {
 	pattern *Pattern
 }
 
-func Decode(file *os.File) (*Pattern, error) {
+func decode(file *os.File) (*Pattern, error) {
 	d := &decoder{
-		file:  file,
+		file:    file,
 		pattern: &Pattern{},
 	}
 
@@ -178,7 +177,7 @@ func (d *decoder) readTrack() {
 
 	track := &Track{}
 
-	d.read(&track.Id)
+	d.read(&track.ID)
 
 	var length uint32
 	d.read(&length)
@@ -189,7 +188,7 @@ func (d *decoder) readTrack() {
 
 	track.Name = string(name)
 
-	var steps = make([]byte, STEPS)
+	var steps = make([]byte, trackSteps)
 	d.read(steps)
 	track.Steps = steps
 
