@@ -1,12 +1,16 @@
 package drum
 
 import (
+	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"strings"
+)
+
+const (
+	STEPS = 16
 )
 
 // Pattern is the high level representation of the
@@ -15,24 +19,43 @@ type Pattern struct {
 	Header  string
 	Version string
 	Tempo   float32
-	Tracks  []struct {
-		Id    uint32
-		Name  string
-		Steps [16]byte
-	}
+	Tracks  []*Track
+}
+
+type Track struct {
+	Id    byte
+	Name  string
+	Steps []byte
 }
 
 func (p *Pattern) String() string {
 	var result []string
 
 	result = append(result, fmt.Sprintf("Saved with HW Version: %s", p.Version))
-	result = append(result, fmt.Sprintf("Tempo: %d", p.Tempo))
+	result = append(result, fmt.Sprintf("Tempo: %v", p.Tempo))
 
 	for _, track := range p.Tracks {
-		result = append(result, fmt.Sprintf("(%d) %s", track.Id, track.Name))
+		line := fmt.Sprintf("(%d) %s\t", track.Id, track.Name)
+
+		for i, step := range track.Steps {
+			if i%4 == 0 {
+				line += "|"
+			}
+
+			if step == 1 {
+				line += "x"
+			} else {
+				line += "-"
+			}
+
+		}
+
+		line += "|"
+
+		result = append(result, line)
 	}
 
-	return strings.Join(result, "\n")
+	return strings.Join(result, "\n") + "\n"
 }
 
 // DecodeFile decodes the drum machine file found at the provided path
@@ -50,24 +73,28 @@ func DecodeFile(path string) (*Pattern, error) {
 }
 
 type decoder struct {
-	reader  io.Reader
+	file    *os.File
 	lastErr error
 	pattern *Pattern
-
-	length uint64
 }
 
-func Decode(reader io.Reader) (*Pattern, error) {
+func Decode(file *os.File) (*Pattern, error) {
 	d := &decoder{
-		reader:  reader,
+		file:  file,
 		pattern: &Pattern{},
 	}
 
 	d.checkHeader()
-	d.readLength()
+
+	length := d.readLength()
+	maxOffset := d.currentOffset() + length
 
 	d.readVersion()
 	d.readTempo()
+
+	for d.currentOffset() < maxOffset {
+		d.readTrack()
+	}
 
 	if d.lastErr != nil {
 		return nil, d.lastErr
@@ -76,14 +103,23 @@ func Decode(reader io.Reader) (*Pattern, error) {
 	return d.pattern, nil
 }
 
+func (d *decoder) currentOffset() uint64 {
+	offset, err := d.file.Seek(0, os.SEEK_CUR)
+	if err != nil {
+		d.lastErr = err
+	}
+
+	return uint64(offset)
+}
+
 func (d *decoder) read(v interface{}) {
 	var err error
 
 	switch v.(type) {
 	case *float32, *float64, *[]float32, *[]float64:
-		err = binary.Read(d.reader, binary.LittleEndian, v)
+		err = binary.Read(d.file, binary.LittleEndian, v)
 	default:
-		err = binary.Read(d.reader, binary.BigEndian, v)
+		err = binary.Read(d.file, binary.BigEndian, v)
 	}
 
 	if err != nil {
@@ -106,14 +142,17 @@ func (d *decoder) checkHeader() {
 	}
 }
 
-func (d *decoder) readLength() {
+func (d *decoder) readLength() uint64 {
 	if d.lastErr != nil {
-		return
+		return 0
 	}
 
-	d.read(&d.length)
+	var length uint64
+	d.read(&length)
 
-	fmt.Println("DEBUG length:", d.length)
+	fmt.Println("DEBUG length:", length)
+
+	return length
 }
 
 func (d *decoder) readVersion() {
@@ -123,6 +162,7 @@ func (d *decoder) readVersion() {
 
 	var version = make([]byte, 32)
 	d.read(version)
+	version = bytes.Trim(version, "\x00")
 
 	d.pattern.Version = string(version)
 
@@ -137,4 +177,31 @@ func (d *decoder) readTempo() {
 	d.read(&d.pattern.Tempo)
 
 	fmt.Println("DEBUG Tempo:", d.pattern.Tempo)
+}
+
+func (d *decoder) readTrack() {
+	if d.lastErr != nil {
+		return
+	}
+
+	track := &Track{}
+
+	d.read(&track.Id)
+
+	var length uint32
+	d.read(&length)
+
+	var name = make([]byte, length)
+	d.read(name)
+	name = bytes.Trim(name, "\x00")
+
+	track.Name = string(name)
+
+	var steps = make([]byte, STEPS)
+	d.read(steps)
+	track.Steps = steps
+
+	d.pattern.Tracks = append(d.pattern.Tracks, track)
+
+	fmt.Printf("DEBUG Length: %v Track: %v\n", length, track)
 }
