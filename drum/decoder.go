@@ -17,7 +17,7 @@ type Pattern struct {
 	Header  string
 	Version string
 	Tempo   float32
-	Tracks  []*Track
+	Tracks  []Track
 }
 
 // Track is the representation of single track in a pattern
@@ -175,7 +175,7 @@ func (d *decoder) readTrack() {
 		return
 	}
 
-	track := &Track{}
+	track := Track{}
 
 	d.read(&track.ID)
 
