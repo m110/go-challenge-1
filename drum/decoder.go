@@ -135,8 +135,6 @@ func (d *decoder) checkHeader() {
 	var header = make([]byte, 6)
 	d.read(header)
 
-	fmt.Println("DEBUG Header:", string(header))
-
 	if string(header) != "SPLICE" {
 		d.lastErr = errors.New("Invalid header")
 	}
@@ -149,8 +147,6 @@ func (d *decoder) readLength() uint64 {
 
 	var length uint64
 	d.read(&length)
-
-	fmt.Println("DEBUG length:", length)
 
 	return length
 }
@@ -165,8 +161,6 @@ func (d *decoder) readVersion() {
 	version = bytes.Trim(version, "\x00")
 
 	d.pattern.Version = string(version)
-
-	fmt.Println("DEBUG version:", d.pattern.Version)
 }
 
 func (d *decoder) readTempo() {
@@ -175,8 +169,6 @@ func (d *decoder) readTempo() {
 	}
 
 	d.read(&d.pattern.Tempo)
-
-	fmt.Println("DEBUG Tempo:", d.pattern.Tempo)
 }
 
 func (d *decoder) readTrack() {
@@ -202,6 +194,4 @@ func (d *decoder) readTrack() {
 	track.Steps = steps
 
 	d.pattern.Tracks = append(d.pattern.Tracks, track)
-
-	fmt.Printf("DEBUG Length: %v Track: %v\n", length, track)
 }
