@@ -8,7 +8,6 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
-	"strings"
 )
 
 const trackSteps = 16
@@ -33,33 +32,30 @@ type Track struct {
 }
 
 func (p *Pattern) String() string {
-	var result []string
+	var buffer bytes.Buffer
 
-	result = append(result, fmt.Sprintf("Saved with HW Version: %s", p.Version))
-	result = append(result, fmt.Sprintf("Tempo: %v", p.Tempo))
+	buffer.WriteString(fmt.Sprintf("Saved with HW Version: %s\n", p.Version))
+	buffer.WriteString(fmt.Sprintf("Tempo: %v\n", p.Tempo))
 
 	for _, track := range p.Tracks {
-		line := fmt.Sprintf("(%d) %s\t", track.ID, track.Name)
+		buffer.WriteString(fmt.Sprintf("(%d) %s\t", track.ID, track.Name))
 
 		for i, step := range track.Steps {
 			if i%4 == 0 {
-				line += "|"
+				buffer.WriteString("|")
 			}
 
 			if step == 1 {
-				line += "x"
+				buffer.WriteString("x")
 			} else {
-				line += "-"
+				buffer.WriteString("-")
 			}
-
 		}
 
-		line += "|"
-
-		result = append(result, line)
+		buffer.WriteString("|\n")
 	}
 
-	return strings.Join(result, "\n") + "\n"
+	return buffer.String()
 }
 
 // DecodeFile decodes the drum machine file found at the provided path
@@ -80,6 +76,7 @@ func DecodeFile(path string) (*Pattern, error) {
 	return p, nil
 }
 
+// UnmarshalBinary loads pattern attributes from provided bytes.
 func (p *Pattern) UnmarshalBinary(data []byte) error {
 	p.buffer = bytes.NewReader(data)
 
