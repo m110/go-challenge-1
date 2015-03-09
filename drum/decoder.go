@@ -11,8 +11,9 @@ import (
 )
 
 const (
-	versionMaxLength = 32
+	headerLength     = 6
 	trackSteps       = 16
+	versionMaxLength = 32
 )
 
 // Pattern is the high level representation of the
@@ -107,7 +108,7 @@ func (p *Pattern) checkHeader() {
 		return
 	}
 
-	header := make([]byte, 6)
+	header := make([]byte, headerLength)
 	p.read(header)
 
 	if !bytes.Equal(header, []byte("SPLICE")) {
