@@ -21,7 +21,6 @@ const (
 // Pattern is the high level representation of the
 // drum pattern contained in a .splice file.
 type Pattern struct {
-	Header  string
 	Version string
 	Tempo   float32
 	Tracks  []Track
