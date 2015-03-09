@@ -34,33 +34,6 @@ type Track struct {
 	Steps [trackSteps]byte
 }
 
-func (p *Pattern) String() string {
-	var buffer bytes.Buffer
-
-	buffer.WriteString(fmt.Sprintf("Saved with HW Version: %s\n", p.Version))
-	buffer.WriteString(fmt.Sprintf("Tempo: %v\n", p.Tempo))
-
-	for _, track := range p.Tracks {
-		buffer.WriteString(fmt.Sprintf("(%d) %s\t", track.ID, track.Name))
-
-		for i, step := range track.Steps {
-			if i%4 == 0 {
-				buffer.WriteString("|")
-			}
-
-			if step == 1 {
-				buffer.WriteString("x")
-			} else {
-				buffer.WriteString("-")
-			}
-		}
-
-		buffer.WriteString("|\n")
-	}
-
-	return buffer.String()
-}
-
 // DecodeFile decodes the drum machine file found at the provided path
 // and returns a pointer to a parsed pattern which is the entry point to the
 // rest of the data.
@@ -202,4 +175,31 @@ func (p *Pattern) readTrack() {
 	copy(track.Steps[:], steps)
 
 	p.Tracks = append(p.Tracks, track)
+}
+
+func (p *Pattern) String() string {
+	var buffer bytes.Buffer
+
+	buffer.WriteString(fmt.Sprintf("Saved with HW Version: %s\n", p.Version))
+	buffer.WriteString(fmt.Sprintf("Tempo: %v\n", p.Tempo))
+
+	for _, track := range p.Tracks {
+		buffer.WriteString(fmt.Sprintf("(%d) %s\t", track.ID, track.Name))
+
+		for i, step := range track.Steps {
+			if i%4 == 0 {
+				buffer.WriteString("|")
+			}
+
+			if step == 1 {
+				buffer.WriteString("x")
+			} else {
+				buffer.WriteString("-")
+			}
+		}
+
+		buffer.WriteString("|\n")
+	}
+
+	return buffer.String()
 }
