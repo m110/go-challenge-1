@@ -90,15 +90,16 @@ func (p *Pattern) currentOffset() uint64 {
 
 // read reads binary data from internal buffer into data.
 func (p *Pattern) read(data interface{}) {
-	var err error
+	var byteOrder binary.ByteOrder
 
 	switch data.(type) {
 	case *float32, *float64, *[]float32, *[]float64:
-		err = binary.Read(p.buffer, binary.LittleEndian, data)
+		byteOrder = binary.LittleEndian
 	default:
-		err = binary.Read(p.buffer, binary.BigEndian, data)
+		byteOrder = binary.BigEndian
 	}
 
+	err := binary.Read(p.buffer, byteOrder, data)
 	if err != nil {
 		p.lastErr = err
 	}
