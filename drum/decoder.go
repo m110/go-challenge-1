@@ -10,7 +10,10 @@ import (
 	"os"
 )
 
-const trackSteps = 16
+const (
+	versionMaxLength = 32
+	trackSteps       = 16
+)
 
 // Pattern is the high level representation of the
 // drum pattern contained in a .splice file.
@@ -24,11 +27,11 @@ type Pattern struct {
 	buffer  io.ReadSeeker
 }
 
-// Track is the representation of single track in a pattern
+// Track is the representation of a single track in the pattern.
 type Track struct {
 	ID    byte
 	Name  string
-	Steps []byte
+	Steps [trackSteps]byte
 }
 
 func (p *Pattern) String() string {
@@ -76,7 +79,7 @@ func DecodeFile(path string) (*Pattern, error) {
 	return p, nil
 }
 
-// UnmarshalBinary loads pattern attributes from provided bytes.
+// UnmarshalBinary loads pattern attributes from data.
 func (p *Pattern) UnmarshalBinary(data []byte) error {
 	p.buffer = bytes.NewReader(data)
 
@@ -92,14 +95,15 @@ func (p *Pattern) UnmarshalBinary(data []byte) error {
 		p.readTrack()
 	}
 
-	if p.lastErr != nil {
-		return p.lastErr
-	}
-
-	return nil
+	return p.lastErr
 }
 
+// currentOffset returns current offset of internal buffer.
 func (p *Pattern) currentOffset() uint64 {
+	if p.lastErr != nil {
+		return 0
+	}
+
 	offset, err := p.buffer.Seek(0, os.SEEK_CUR)
 	if err != nil {
 		p.lastErr = err
@@ -108,14 +112,15 @@ func (p *Pattern) currentOffset() uint64 {
 	return uint64(offset)
 }
 
-func (p *Pattern) read(v interface{}) {
+// read reads binary data from internal buffer into data.
+func (p *Pattern) read(data interface{}) {
 	var err error
 
-	switch v.(type) {
+	switch data.(type) {
 	case *float32, *float64, *[]float32, *[]float64:
-		err = binary.Read(p.buffer, binary.LittleEndian, v)
+		err = binary.Read(p.buffer, binary.LittleEndian, data)
 	default:
-		err = binary.Read(p.buffer, binary.BigEndian, v)
+		err = binary.Read(p.buffer, binary.BigEndian, data)
 	}
 
 	if err != nil {
@@ -123,19 +128,21 @@ func (p *Pattern) read(v interface{}) {
 	}
 }
 
+// checkHeader reads header from internal buffer and checks if it is correct.
 func (p *Pattern) checkHeader() {
 	if p.lastErr != nil {
 		return
 	}
 
-	var header = make([]byte, 6)
+	header := make([]byte, 6)
 	p.read(header)
 
-	if string(header) != "SPLICE" {
-		p.lastErr = errors.New("Invalid header")
+	if !bytes.Equal(header, []byte("SPLICE")) {
+		p.lastErr = errors.New("invalid header")
 	}
 }
 
+// readLength reads content's length from internal buffer and returns it.
 func (p *Pattern) readLength() uint64 {
 	if p.lastErr != nil {
 		return 0
@@ -147,18 +154,21 @@ func (p *Pattern) readLength() uint64 {
 	return length
 }
 
+// readVersion reads pattern version from internal buffer.
 func (p *Pattern) readVersion() {
 	if p.lastErr != nil {
 		return
 	}
 
-	var version = make([]byte, 32)
+	version := make([]byte, versionMaxLength)
 	p.read(version)
-	version = bytes.Trim(version, "\x00")
 
-	p.Version = string(version)
+	// Save version up to null byte
+	n := bytes.Index(version, []byte{0})
+	p.Version = string(version[:n])
 }
 
+// readTempo reads pattern tempo from internal buffer.
 func (p *Pattern) readTempo() {
 	if p.lastErr != nil {
 		return
@@ -167,6 +177,7 @@ func (p *Pattern) readTempo() {
 	p.read(&p.Tempo)
 }
 
+// readTrack reads single track from internal buffer.
 func (p *Pattern) readTrack() {
 	if p.lastErr != nil {
 		return
@@ -176,18 +187,19 @@ func (p *Pattern) readTrack() {
 
 	p.read(&track.ID)
 
+	// Name's length
 	var length uint32
 	p.read(&length)
 
-	var name = make([]byte, length)
+	// Track's name
+	name := make([]byte, length)
 	p.read(name)
-	name = bytes.Trim(name, "\x00")
-
 	track.Name = string(name)
 
-	var steps = make([]byte, trackSteps)
+	// Track's steps
+	steps := make([]byte, trackSteps)
 	p.read(steps)
-	track.Steps = steps
+	copy(track.Steps[:], steps)
 
 	p.Tracks = append(p.Tracks, track)
 }
