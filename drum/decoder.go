@@ -14,6 +14,8 @@ const (
 	headerLength     = 6
 	trackSteps       = 16
 	versionMaxLength = 32
+
+	spliceHeader = "SPLICE"
 )
 
 // Pattern is the high level representation of the
@@ -111,7 +113,7 @@ func (p *Pattern) checkHeader() {
 	header := make([]byte, headerLength)
 	p.read(header)
 
-	if !bytes.Equal(header, []byte("SPLICE")) {
+	if !bytes.Equal(header, []byte(spliceHeader)) {
 		p.lastErr = errors.New("invalid header")
 	}
 }
