@@ -5,6 +5,8 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"io"
+	"io/ioutil"
 	"os"
 	"strings"
 )
@@ -18,6 +20,9 @@ type Pattern struct {
 	Version string
 	Tempo   float32
 	Tracks  []Track
+
+	lastErr error
+	buffer  io.ReadSeeker
 }
 
 // Track is the representation of single track in a pattern
@@ -61,136 +66,131 @@ func (p *Pattern) String() string {
 // and returns a pointer to a parsed pattern which is the entry point to the
 // rest of the data.
 func DecodeFile(path string) (*Pattern, error) {
-	file, err := os.Open(path)
+	data, err := ioutil.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
 
-	defer file.Close()
-
-	return decode(file)
-}
-
-type decoder struct {
-	file    *os.File
-	lastErr error
-	pattern *Pattern
-}
-
-func decode(file *os.File) (*Pattern, error) {
-	d := &decoder{
-		file:    file,
-		pattern: &Pattern{},
-	}
-
-	d.checkHeader()
-
-	length := d.readLength()
-	maxOffset := d.currentOffset() + length
-
-	d.readVersion()
-	d.readTempo()
-
-	for d.currentOffset() < maxOffset {
-		d.readTrack()
-	}
-
-	if d.lastErr != nil {
-		return nil, d.lastErr
-	}
-
-	return d.pattern, nil
-}
-
-func (d *decoder) currentOffset() uint64 {
-	offset, err := d.file.Seek(0, os.SEEK_CUR)
+	p := &Pattern{}
+	err = p.UnmarshalBinary(data)
 	if err != nil {
-		d.lastErr = err
+		return nil, err
+	}
+
+	return p, nil
+}
+
+func (p *Pattern) UnmarshalBinary(data []byte) error {
+	p.buffer = bytes.NewReader(data)
+
+	p.checkHeader()
+
+	length := p.readLength()
+	maxOffset := p.currentOffset() + length
+
+	p.readVersion()
+	p.readTempo()
+
+	for p.currentOffset() < maxOffset {
+		p.readTrack()
+	}
+
+	if p.lastErr != nil {
+		return p.lastErr
+	}
+
+	return nil
+}
+
+func (p *Pattern) currentOffset() uint64 {
+	offset, err := p.buffer.Seek(0, os.SEEK_CUR)
+	if err != nil {
+		p.lastErr = err
 	}
 
 	return uint64(offset)
 }
 
-func (d *decoder) read(v interface{}) {
+func (p *Pattern) read(v interface{}) {
 	var err error
 
 	switch v.(type) {
 	case *float32, *float64, *[]float32, *[]float64:
-		err = binary.Read(d.file, binary.LittleEndian, v)
+		err = binary.Read(p.buffer, binary.LittleEndian, v)
 	default:
-		err = binary.Read(d.file, binary.BigEndian, v)
+		err = binary.Read(p.buffer, binary.BigEndian, v)
 	}
 
 	if err != nil {
-		d.lastErr = err
+		p.lastErr = err
 	}
 }
 
-func (d *decoder) checkHeader() {
-	if d.lastErr != nil {
+func (p *Pattern) checkHeader() {
+	if p.lastErr != nil {
 		return
 	}
 
 	var header = make([]byte, 6)
-	d.read(header)
+	p.read(header)
 
 	if string(header) != "SPLICE" {
-		d.lastErr = errors.New("Invalid header")
+		p.lastErr = errors.New("Invalid header")
 	}
 }
 
-func (d *decoder) readLength() uint64 {
-	if d.lastErr != nil {
+func (p *Pattern) readLength() uint64 {
+	if p.lastErr != nil {
 		return 0
 	}
 
 	var length uint64
-	d.read(&length)
+	p.read(&length)
 
 	return length
 }
 
-func (d *decoder) readVersion() {
-	if d.lastErr != nil {
+func (p *Pattern) readVersion() {
+	if p.lastErr != nil {
 		return
 	}
 
 	var version = make([]byte, 32)
-	d.read(version)
+	p.read(version)
 	version = bytes.Trim(version, "\x00")
 
-	d.pattern.Version = string(version)
+	p.Version = string(version)
 }
 
-func (d *decoder) readTempo() {
-	if d.lastErr != nil {
+func (p *Pattern) readTempo() {
+	if p.lastErr != nil {
 		return
 	}
 
-	d.read(&d.pattern.Tempo)
+	p.read(&p.Tempo)
 }
 
-func (d *decoder) readTrack() {
-	if d.lastErr != nil {
+func (p *Pattern) readTrack() {
+	if p.lastErr != nil {
 		return
 	}
 
 	track := Track{}
 
-	d.read(&track.ID)
+	p.read(&track.ID)
 
 	var length uint32
-	d.read(&length)
+	p.read(&length)
 
 	var name = make([]byte, length)
-	d.read(name)
+	p.read(name)
 	name = bytes.Trim(name, "\x00")
 
 	track.Name = string(name)
 
 	var steps = make([]byte, trackSteps)
-	d.read(steps)
+	p.read(steps)
 	track.Steps = steps
 
-	d.pattern.Tracks = append(d.pattern.Tracks, track)
+	p.Tracks = append(p.Tracks, track)
 }
